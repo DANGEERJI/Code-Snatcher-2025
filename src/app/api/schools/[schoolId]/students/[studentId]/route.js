@@ -2,7 +2,6 @@ import admin from "@/lib/firebaseAdmin";
 import { verifyIdToken } from "@/lib/authMiddleware";
 import { NextResponse } from "next/server";
 
-// Update student
 export async function PATCH(req, { params }) {
   const { schoolId, studentId } = params;
   try {

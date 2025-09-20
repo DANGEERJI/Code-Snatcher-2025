@@ -2,7 +2,6 @@ import admin from "@/lib/firebaseAdmin";
 import { verifyIdToken } from "@/lib/authMiddleware";
 import { NextResponse } from "next/server";
 
-// Add class
 export async function POST(req, { params }) {
   const { schoolId } = params;
   try {
@@ -16,7 +15,6 @@ export async function POST(req, { params }) {
   }
 }
 
-// Get classes of a school
 export async function GET(req, { params }) {
   const { schoolId } = params;
   try {

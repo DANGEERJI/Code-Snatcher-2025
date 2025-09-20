@@ -18,7 +18,6 @@ export default function TestUploadPage() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
 
-      // Loop through each sheet in the Excel file
       for (const sheetName of workbook.SheetNames) {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);

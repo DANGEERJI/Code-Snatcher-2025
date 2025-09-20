@@ -18,7 +18,6 @@ export async function PATCH(req, { params }) {
   }
 }
 
-// Get single school by ID
 export async function GET(req, { params }) {
   const { schoolId } = params;
   try {

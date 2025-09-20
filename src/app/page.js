@@ -11,7 +11,7 @@ export default function HomePage() {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col overflow-hidden">
-      {/* Background Image with minimal blur */}
+      {}
       <div
         className="absolute inset-0 bg-cover bg-center filter blur-sm"
         style={{
@@ -19,10 +19,10 @@ export default function HomePage() {
         }}
       ></div>
 
-      {/* Strong blackish overlay for better text readability */}
+      {}
       <div className="absolute inset-0 bg-black/70"></div>
 
-      {/* Top-right login button */}
+      {}
       <div className="absolute top-5 right-5 z-10">
         <button
           onClick={goToLogin}
@@ -32,9 +32,9 @@ export default function HomePage() {
         </button>
       </div>
 
-      {/* Hero Section: More vertically centered */}
+      {}
       <div className="relative z-10 flex flex-col md:flex-row items-center justify-center min-h-[80vh] w-full max-w-6xl mx-auto px-4 py-20 gap-10">
-        {/* Info Section */}
+        {}
         <div className="md:w-1/2 text-white text-left">
           <h1 className="text-3xl md:text-5xl font-bold mb-4">
             Welcome to UDAY
@@ -48,7 +48,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Illustration Section */}
+        {}
         <div className="md:w-1/2 flex justify-center">
           <div className="w-64 h-64 md:w-80 md:h-80 bg-white/10 rounded-2xl shadow-lg overflow-hidden flex items-center justify-center">
             <img
@@ -60,7 +60,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Footer: smaller and lower */}
+      {}
       <div className="relative z-10 text-center text-gray-400 text-xs py-8">
         &copy; {new Date().getFullYear()} UDAY. All rights reserved.
       </div>

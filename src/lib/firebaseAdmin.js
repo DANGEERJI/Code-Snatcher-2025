@@ -1,9 +1,9 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' }); // explicitly load .env.local
+dotenv.config({ path: '.env.local' }); 
 import admin from "firebase-admin";
 
 if (!admin.apps.length) {
-    console.log("API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY); // should now print value
+    console.log("API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY); 
     if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
         throw new Error("Firebase Admin credentials are missing in environment variables!");
     }

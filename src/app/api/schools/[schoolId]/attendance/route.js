@@ -2,7 +2,6 @@ import admin from "@/lib/firebaseAdmin";
 import { verifyIdToken } from "@/lib/authMiddleware";
 import { NextResponse } from "next/server";
 
-// Fetch attendance of school or classroom
 export async function GET(req, { params }) {
   const { schoolId } = params;
   try {

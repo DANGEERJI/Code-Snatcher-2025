@@ -12,9 +12,7 @@ export async function POST(req) {
 
     for (const row of data) {
       switch (sheet.toLowerCase()) {
-        // ------------------------
-        // Schools
-        // ------------------------
+
         case "schools": {
           const schoolRef = doc(db, "schools", row.schoolId);
           await setDoc(schoolRef, {
@@ -34,9 +32,6 @@ export async function POST(req) {
           break;
         }
 
-        // ------------------------
-        // Teachers
-        // ------------------------
         case "teachers": {
           const teacherRef = doc(db, "schools", row.schoolId, "teachers", row.teacherId);
           await setDoc(teacherRef, {
@@ -46,20 +41,18 @@ export async function POST(req) {
             phone: row.phone ?? "",
             role: row.role ?? "",
             subject: row.subject ?? "",
-            schoolId: doc(db, "schools", row.schoolId), // reference
+            schoolId: doc(db, "schools", row.schoolId), 
           });
           break;
         }
 
-        // ------------------------
-        // Classes
-        // ------------------------
+
         case "classes": {
           const classRef = doc(db, "schools", row.schoolId, "classes", row.classId);
           await setDoc(classRef, {
             name: row.name ?? "",
-            schoolId: doc(db, "schools", row.schoolId), // reference
-            teacherId: doc(db, "schools", row.schoolId, "teachers", row.teacherId), // reference
+            schoolId: doc(db, "schools", row.schoolId), 
+            teacherId: doc(db, "schools", row.schoolId, "teachers", row.teacherId), 
             studentIds: row.studentIds
               ? row.studentIds.split(",").map((id) =>
                   doc(db, "schools", row.schoolId, "students", id.trim())
@@ -69,16 +62,13 @@ export async function POST(req) {
           break;
         }
 
-        // ------------------------
-        // Students
-        // ------------------------
         case "students": {
           const studentRef = doc(db, "schools", row.schoolId, "students", row.studentId);
           await setDoc(studentRef, {
             name: row.name ?? "",
             rollNumber: row.rollNumber ?? "",
-            classId: doc(db, "schools", row.schoolId, "classes", row.classId), // reference
-            schoolId: doc(db, "schools", row.schoolId), // reference
+            classId: doc(db, "schools", row.schoolId, "classes", row.classId), 
+            schoolId: doc(db, "schools", row.schoolId), 
             gender: row.gender ?? "",
             admissionDate: row.admissionDate ? new Date(row.admissionDate) : null,
             dateOfBirth: row.dateOfBirth ? new Date(row.dateOfBirth) : null,
@@ -99,16 +89,14 @@ export async function POST(req) {
           break;
         }
 
-        // ------------------------
-        // Attendance
-        // ------------------------
+
         case "attendance": {
           const attendanceRef = doc(db, "schools", row.schoolId, "attendance", row.attendanceId);
           await setDoc(attendanceRef, {
-            schoolId: doc(db, "schools", row.schoolId), // reference
-            classId: doc(db, "schools", row.schoolId, "classes", row.classId), // reference
-            studentId: doc(db, "schools", row.schoolId, "students", row.studentId), // reference
-            teacherId: doc(db, "schools", row.schoolId, "teachers", row.teacherId), // reference
+            schoolId: doc(db, "schools", row.schoolId), 
+            classId: doc(db, "schools", row.schoolId, "classes", row.classId), 
+            studentId: doc(db, "schools", row.schoolId, "students", row.studentId), 
+            teacherId: doc(db, "schools", row.schoolId, "teachers", row.teacherId), 
             session: row.session ?? "",
             status: row.status ?? "",
             timestamp: row.timestamp ? new Date(row.timestamp) : new Date(),

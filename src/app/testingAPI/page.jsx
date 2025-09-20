@@ -19,7 +19,6 @@ export default function APITestPage() {
       let url = "";
       const options = { method: operation, headers: { "Content-Type": "application/json" } };
 
-      // Build API URL based on entity and IDs
       switch (entity) {
         case "schools":
           url = schoolId ? `${baseUrl}/schools/${schoolId}` : `${baseUrl}/schools`;
@@ -51,7 +50,6 @@ export default function APITestPage() {
           return;
       }
 
-      // Add body for POST or PATCH
       if (operation === "POST" || operation === "PATCH") {
         options.body = payload;
       }
@@ -68,7 +66,7 @@ export default function APITestPage() {
     <div className="p-8 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">API Testing Page</h1>
 
-      {/* Entity & Operation */}
+      {}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label>Entity:</label>
@@ -85,8 +83,6 @@ export default function APITestPage() {
           <label>Operation:</label>
           <select value={operation} onChange={e => setOperation(e.target.value)} className="w-full border p-2 rounded">
             <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PATCH">PATCH</option>
           </select>
         </div>
 
@@ -96,7 +92,7 @@ export default function APITestPage() {
         </div>
       </div>
 
-      {/* IDs for Classes, Students, Teachers */}
+      {}
       {(entity === "classes" || entity === "students" || entity === "teachers" || entity === "attendance") && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           {entity === "classes" && <div>
@@ -121,7 +117,7 @@ export default function APITestPage() {
         </div>
       )}
 
-      {/* JSON Payload */}
+      {}
       {(operation === "POST" || operation === "PATCH") && (
         <div className="mb-4">
           <label>Payload (JSON):</label>

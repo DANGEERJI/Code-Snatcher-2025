@@ -8,7 +8,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [userType, setUserType] = useState(""); // Teacher or Admin
+  const [userType, setUserType] = useState(""); 
   const router = useRouter();
 
   useEffect(() => {
@@ -25,7 +25,6 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
 
-      // Redirect based on user type
       if (userType === "teacher") {
         router.push("/dashboard-teacher");
       } else if (userType === "admin") {
@@ -36,7 +35,6 @@ export default function LoginPage() {
     }
   };
 
-  // Step 1: User type selection
   if (!userType) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-green-50 px-4">
@@ -64,16 +62,15 @@ export default function LoginPage() {
     );
   }
 
-  // Step 2: Login form
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-green-50 px-4">
       <div className="bg-white w-full max-w-md p-8 md:p-10 rounded-3xl shadow-xl flex flex-col items-center">
-        {/* Logo */}
+        {}
         <div className="bg-blue-500 text-white font-bold rounded-full w-16 h-16 flex items-center justify-center text-2xl mb-6 shadow-lg">
           S
         </div>
 
-        {/* Header */}
+        {}
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2 text-center">
           {userType === "teacher" ? "Teacher Login" : "Admin Login"}
         </h1>
@@ -81,7 +78,7 @@ export default function LoginPage() {
           Enter your credentials to continue
         </p>
 
-        {/* Form */}
+        {}
         <form className="w-full space-y-4" onSubmit={handleLogin}>
           <input
             type="email"
@@ -119,7 +116,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Footer */}
+        {}
         <p className="text-center text-gray-600 mt-6 text-sm">
           Don't have an account?{" "}
           <a href="#" className="text-blue-500 hover:underline font-medium">
@@ -127,7 +124,7 @@ export default function LoginPage() {
           </a>
         </p>
 
-        {/* Back button */}
+        {}
         <button
           onClick={() => setUserType("")}
           className="mt-4 text-sm text-gray-500 hover:underline"

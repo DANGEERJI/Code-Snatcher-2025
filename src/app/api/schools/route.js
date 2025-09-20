@@ -2,7 +2,6 @@ import admin from "@/lib/firebaseAdmin";
 import { verifyIdToken } from "@/lib/authMiddleware";
 import { NextResponse } from "next/server";
 
-// Add a new school
 export async function POST(req) {
   try {
     const decoded = await verifyIdToken(req);
@@ -17,7 +16,6 @@ export async function POST(req) {
   }
 }
 
-// Get all schools
 export async function GET(req) {
   try {
     const snap = await admin.firestore().collection("schools").get();

@@ -2,7 +2,6 @@ import admin from "@/lib/firebaseAdmin";
 import { verifyIdToken } from "@/lib/authMiddleware";
 import { NextResponse } from "next/server";
 
-// Get students of a class
 export async function GET(req, { params }) {
   const { schoolId, classId } = params;
   try {
