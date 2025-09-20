@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 
 // Verify Firebase ID Token from Authorization header
 export async function verifyIdToken(req) {
+    if (process.env.NODE_ENV === "development") {
+        return { uid: "devUser", email: "test@test.com", admin: true };
+    }
     const authHeader = req.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
         throw new Error("Unauthorized: Missing token");

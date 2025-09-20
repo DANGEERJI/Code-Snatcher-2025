@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 // Add student
 export async function POST(req, { params }) {
-  const { schoolId } = params;
+  const { schoolId } = await params;
   try {
     await verifyIdToken(req);
     const body = await req.json();
@@ -18,7 +18,7 @@ export async function POST(req, { params }) {
 
 // Get students of a school
 export async function GET(req, { params }) {
-  const { schoolId } = params;
+  const { schoolId } = await params;
   try {
     await verifyIdToken(req);
     const snap = await admin.firestore().collection("schools").doc(schoolId).collection("students").get();

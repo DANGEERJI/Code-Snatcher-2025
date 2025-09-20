@@ -15,3 +15,25 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function GET(req, { params }) {
+  const { schoolId, classId } = params;
+  try {
+    await verifyIdToken(req);
+    const docSnap = await admin
+      .firestore()
+      .collection("schools")
+      .doc(schoolId)
+      .collection("classes")
+      .doc(classId)
+      .get();
+
+    if (!docSnap.exists) {
+      return NextResponse.json({ error: "Class not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ id: docSnap.id, ...docSnap.data() });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
