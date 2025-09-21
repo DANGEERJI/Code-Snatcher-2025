@@ -2,7 +2,59 @@
 
 import { useState, useEffect } from "react";
 import { User, BookOpen, Building2 } from "lucide-react";
-import Select from "react-select";
+
+// Note: Removed 'Select' from "react-select" and 'useSearchParams' from "next/navigation"
+// as they are not available in this environment. They are replaced with standard browser APIs.
+
+// --- Authentication Helpers ---
+
+// Helper function to get the auth token.
+// In a real app, this would be managed by your authentication logic (e.g., after login).
+const getAuthToken = () => {
+  if (typeof window !== "undefined") {
+    // The token is retrieved from localStorage.
+    return localStorage.getItem("authToken");
+  }
+  return null;
+};
+
+// Custom fetch wrapper to automatically include the Authorization header.
+const authFetch = async (url, options = {}) => {
+  const token = getAuthToken();
+  const headers = {
+    ...options.headers,
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    // If no token is found, API requests might fail.
+    console.warn("Authentication token is missing.");
+  }
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (!response.ok) {
+    const errorData = await response.text();
+    console.error(`API Error (${response.status}): ${errorData}`);
+    throw new Error(`Request failed with status: ${response.status}`);
+  }
+  
+  // Return the JSON response
+  return response.json();
+};
+
+const formatTimestamp = (timestamp) => {
+  // Check if the timestamp is a Firestore-like object with _seconds
+  if (timestamp && typeof timestamp === 'object' && '_seconds' in timestamp) {
+    // Convert to a readable date string (e.g., "9/21/2025")
+    return new Date(timestamp._seconds * 1000).toLocaleDateString();
+  }
+  // If it's already a string or another format, return it as is or provide a fallback
+  return typeof timestamp === 'string' ? timestamp : "N/A";
+};
+
 
 export default function Dashboard() {
   const [role, setRole] = useState(null);
@@ -21,93 +73,165 @@ export default function Dashboard() {
   const baseUrl = "/api";
   const schoolId = selectedSchool?.value || "";
 
-  // ---------------- Fetch Schools ----------------
+  // ---------------- Get Role from Storage and Fetch Schools ----------------
   useEffect(() => {
-    setRole("admin");
-    fetch(`${baseUrl}/schools`)
-      .then(res => res.json())
-      .then(setSchools)
-      .catch(console.error);
+    // In a real app, the role might be determined after login.
+    const storedRole = localStorage.getItem("userRole"); 
+    setRole(storedRole || 'admin'); // Default to admin if no role is stored
   }, []);
+  
+  useEffect(() => {
+    // Fetch schools only if the user is an admin or teacher
+    if (role === "admin" || role === "teacher") {
+      authFetch(`${baseUrl}/schools`)
+        .then(data => setSchools(Array.isArray(data) ? data : []))
+        .catch(err => {
+          console.error("Failed to fetch schools:", err);
+          setSchools([]); 
+        });
+    }
+  }, [role]);
 
   // ---------------- Fetch Attendance ----------------
-  const fetchAttendance = async (classId = "") => {
+  const fetchAttendance = async (classId = "", students = [], teachers = [], classes = []) => {
     if (!schoolId) return;
-
+  
     let url = `${baseUrl}/schools/${schoolId}/attendance`;
     if (classId) url = `${baseUrl}/schools/${schoolId}/attendance/${classId}`;
-
+  
     try {
-      const res = await fetch(url);
-      const data = await res.json();
-
-      const mapped = data.map(a => ({
-        ...a,
-        classId: a.classId?.id || a.classId?._path?.segments?.[3] || a.classId || "N/A",
-        className: a.className || a.classId?.name || "N/A",
-        teacherId: a.teacherId?.id || a.teacherId || "N/A",
-        teacherName: a.teacherName || a.teacherId?.name || "N/A",
-        studentId: a.studentId?.id || a.studentId || "N/A",
-        studentName: a.studentName || a.studentId?.name || "N/A"
-      }));
-
+      const data = await authFetch(url);
+  
+      const mapped = Array.isArray(data) ? data.map(a => {
+        // Extract IDs robustly from potential reference objects
+        const extractedClassId = a.classId?.id || a.classId?._path?.segments?.[3] || a.classId;
+        const extractedTeacherId = a.teacherId?.id || a.teacherId?._path?.segments?.[3] || a.teacherId;
+        const extractedStudentId = a.studentId?.id || a.studentId?._path?.segments?.[3] || a.studentId;
+  
+        // Find the corresponding objects in the state arrays
+        const classInfo = classes.find(c => c.id === extractedClassId);
+        const teacherInfo = teachers.find(t => t.id === extractedTeacherId);
+        // Note: The students array is already enriched, so we find by student.id
+        const studentInfo = students.find(s => s.id === extractedStudentId);
+        console.log(classInfo);
+  
+        return {
+          ...a,
+          classId: extractedClassId || "N/A",
+          className: classInfo?.name || "N/A",
+          teacherId: extractedTeacherId || "N/A",
+          teacherName: teacherInfo?.name || "N/A",
+          studentId: extractedStudentId || "N/A",
+          studentName: studentInfo?.name || "N/A",
+        };
+      }) : [];
+  
       setAttendanceData(mapped);
     } catch (err) {
       console.error("Error fetching attendance:", err);
+      setAttendanceData([]); // Reset on error
     }
   };
 
   // ---------------- Fetch Students/Teachers/Classes ----------------
   useEffect(() => {
-    if (!schoolId) return;
+    // This effect runs only when the school changes.
+    if (!schoolId) {
+      // Clear data and selections when no school is selected
+      setStudents([]);
+      setTeachers([]);
+      setClasses([]);
+      setAttendanceData([]);
+      setSelectedClass("");
+      setSelectedTeacher(null);
+      setSelectedStudent(null);
+      return;
+    }
 
     setLoading(true);
+    // Reset dependent filters when school changes
+    setSelectedClass("");
+    setSelectedTeacher(null);
+    setSelectedStudent(null);
 
     Promise.all([
-      fetch(`${baseUrl}/schools/${schoolId}/students`).then(res => res.json()).then(setStudents),
-      fetch(`${baseUrl}/schools/${schoolId}/teachers`).then(res => res.json()).then(setTeachers),
-      fetch(`${baseUrl}/schools/${schoolId}/classes`).then(res => res.json()).then(setClasses),
+      authFetch(`${baseUrl}/schools/${schoolId}/students`),
+      authFetch(`${baseUrl}/schools/${schoolId}/teachers`),
+      authFetch(`${baseUrl}/schools/${schoolId}/classes`),
     ])
-      .then(() => {
-        fetchAttendance(selectedClass);
-        setLoading(false);
+      .then(([studentsData, teachersData, classesData]) => {
+        const safeClasses = Array.isArray(classesData) ? classesData : [];
+        const safeStudents = Array.isArray(studentsData) ? studentsData : [];
+        const schoolInfo = schools.find(s => s.id === schoolId);
+
+        // Enrich student data with class and school names for display
+        const enrichedStudents = safeStudents.map(student => {
+          const studentClassId = student.classId?.id || student.classId?._path?.segments?.[3] || student.classId;
+          const classInfo = safeClasses.find(c => c.id === studentClassId);
+          
+          return {
+            ...student,
+            // Create objects that match the structure expected by StudentCard for display
+            classId: { name: classInfo?.name || "N/A" },
+            schoolId: { name: schoolInfo?.name || "N/A" },
+          };
+        });
+
+        setStudents(enrichedStudents);
+        setTeachers(Array.isArray(teachersData) ? teachersData : []);
+        setClasses(safeClasses);
       })
       .catch(err => {
-        console.error(err);
+        console.error("Failed to fetch school data:", err);
+        // Clear data on error to prevent inconsistent state
+        setStudents([]);
+        setTeachers([]);
+        setClasses([]);
+      })
+      .finally(() => {
         setLoading(false);
       });
-  }, [schoolId, selectedClass]);
+  }, [schoolId, schools]); // Rerun if schools array changes
 
-  // ---------------- Shared Styles ----------------
-  const selectStyles = {
-    control: (provided) => ({
-      ...provided,
-      borderRadius: "8px",
-      borderColor: "#7C3AED",
-      minHeight: "42px",
-      boxShadow: "none",
-      fontSize: "14px",
-    }),
-    menu: (provided) => ({ ...provided, borderRadius: "8px", zIndex: 100 }),
+  // ---------------- Fetch Attendance ----------------
+  useEffect(() => {
+    // This effect runs when the school changes OR when the class filter changes.
+    if (schoolId) {
+      fetchAttendance(selectedClass);
+    }
+  }, [schoolId, selectedClass]); // Depends on both
+
+  // A generic style for the select dropdowns
+  const selectClassName = "w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-700 focus:ring-2 focus:ring-purple-400 focus:outline-none bg-white";
+
+  // Handler for select changes
+  const handleSelectChange = (setter) => (e) => {
+    const { value, options, selectedIndex } = e.target;
+    if (value) {
+      setter({ value, label: options[selectedIndex].text });
+    } else {
+      setter(null);
+    }
   };
+
 
   // ---------------- Render ----------------
   return (
-    <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-blue-100">
+    <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-blue-100 font-sans">
       <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center md:text-left drop-shadow-sm">
         {role ? role.charAt(0).toUpperCase() + role.slice(1) : ""} Dashboard
       </h1>
 
       {(role === "teacher" || role === "admin") && (
         <div className="mb-6 w-full md:w-96">
-          <Select
-            placeholder="Select School"
-            options={schools.map(s => ({ value: s.id, label: s.name }))}
-            onChange={setSelectedSchool}
-            value={selectedSchool}
-            styles={selectStyles}
-            isClearable
-          />
+          <select
+            value={selectedSchool?.value || ""}
+            onChange={handleSelectChange(setSelectedSchool)}
+            className={selectClassName}
+          >
+            <option value="">Select a School</option>
+            {Array.isArray(schools) && schools.map(s => ({ value: s.id, label: s.name })).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
         </div>
       )}
 
@@ -133,7 +257,8 @@ export default function Dashboard() {
           setSelectedTeacher={setSelectedTeacher}
           selectedStudent={selectedStudent}
           setSelectedStudent={setSelectedStudent}
-          selectStyles={selectStyles}
+          selectClassName={selectClassName}
+          handleSelectChange={handleSelectChange}
         />
       )}
 
@@ -153,7 +278,8 @@ export default function Dashboard() {
           setSelectedTeacher={setSelectedTeacher}
           selectedStudent={selectedStudent}
           setSelectedStudent={setSelectedStudent}
-          selectStyles={selectStyles}
+          selectClassName={selectClassName}
+          handleSelectChange={handleSelectChange}
         />
       )}
     </div>
@@ -163,8 +289,12 @@ export default function Dashboard() {
 // ---------------- StudentCard ---------------- //
 function StudentCard({ student, attendance, filter, setFilter }) {
   if (!student) return <p className="text-gray-500 text-center">No student selected</p>;
+  console.log(student);
 
-  const filteredAttendance = attendance.filter(a => a.studentId === student.id);
+  const filteredAttendance = attendance
+    .filter(a => a.studentId === student.id)
+    .filter(a => filter === 'all' || a.status?.toLowerCase() === filter);
+
 
   return (
     <section className="bg-white rounded-2xl p-6 shadow-md max-w-4xl mx-auto mb-8">
@@ -177,8 +307,8 @@ function StudentCard({ student, attendance, filter, setFilter }) {
         <p><strong>Roll No:</strong> {student?.rollNumber || "N/A"}</p>
         <p><strong>Gender:</strong> {student?.gender || "N/A"}</p>
         <p><strong>DOB:</strong> {student?.dateOfBirth?._seconds ? new Date(student.dateOfBirth._seconds * 1000).toLocaleDateString() : "N/A"}</p>
-        <p><strong>Class:</strong> {student?.classId?.name || student?.classId || "N/A"}</p>
-        <p><strong>School:</strong> {student?.schoolId?.name || student?.schoolId || "N/A"}</p>
+        <p><strong>Class:</strong> {student?.classId?.name || "N/A"}</p>
+        <p><strong>School:</strong> {student?.schoolId?.name || "N/A"}</p>
         <p><strong>Parent:</strong> {student?.parent?.name || "N/A"}</p>
         <p><strong>Phone:</strong> {student?.parent?.contact?.phone || "N/A"}</p>
       </div>
@@ -198,9 +328,9 @@ function StudentCard({ student, attendance, filter, setFilter }) {
         <ul className="mt-3 max-h-64 overflow-y-auto">
           {filteredAttendance?.map((a, i) => (
             <li key={i} className={`flex justify-between items-center px-3 py-2 rounded-md mb-1 text-sm ${
-              a.status?.toLowerCase() === "present" ? "bg-green-100" : "bg-red-100"
+              a.status?.toLowerCase() === "present" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
             }`}>
-              <span>{a.date || "N/A"} — {a.session || "N/A"}</span>
+              <span>{formatTimestamp(a.timestamp) || "N/A"} — {a.session || "N/A"}</span>
               <span className="font-semibold px-2 py-1 rounded-full text-xs">{a.status || "N/A"}</span>
             </li>
           ))}
@@ -221,7 +351,8 @@ function TeacherCard({
   setSelectedTeacher,
   selectedStudent,
   setSelectedStudent,
-  selectStyles
+  selectClassName,
+  handleSelectChange
 }) {
   const filteredAttendance = attendance
     .filter(a => (selectedTeacher ? a.teacherId === selectedTeacher?.value : true))
@@ -235,22 +366,22 @@ function TeacherCard({
       </h2>
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <Select
-          placeholder="Select Teacher"
-          options={teachers.map(t => ({ value: t.id, label: t.name }))}
-          onChange={setSelectedTeacher}
-          value={selectedTeacher}
-          styles={selectStyles}
-          isClearable
-        />
-        <Select
-          placeholder="Select Student"
-          options={students.map(s => ({ value: s.id, label: s.name }))}
-          onChange={setSelectedStudent}
-          value={selectedStudent}
-          styles={selectStyles}
-          isClearable
-        />
+        <select
+          value={selectedTeacher?.value || ""}
+          onChange={handleSelectChange(setSelectedTeacher)}
+          className={selectClassName}
+        >
+          <option value="">Select a Teacher</option>
+          {Array.isArray(teachers) && teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <select
+          value={selectedStudent?.value || ""}
+          onChange={handleSelectChange(setSelectedStudent)}
+          className={selectClassName}
+        >
+          <option value="">Select a Student</option>
+          {Array.isArray(students) && students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       {!selectedStudent ? (
@@ -283,7 +414,8 @@ function AdminCard({
   setSelectedTeacher,
   selectedStudent,
   setSelectedStudent,
-  selectStyles
+  selectClassName,
+  handleSelectChange
 }) {
   // client-side filtering
   const filteredAttendance = attendance
@@ -292,22 +424,21 @@ function AdminCard({
     .filter(a => (selectedStudent ? String(a.studentId) === String(selectedStudent?.value) : true))
     .filter(a => (filter === "all" ? true : a.status?.toLowerCase() === filter.toLowerCase()));
 
-  // find selected class object
-  const selectedClassObj = classes.find(c => String(c.id) === String(selectedClass));
+  const selectedClassObj = Array.isArray(classes) ? classes.find(c => String(c.id) === String(selectedClass)) : null;
 
   return (
     <section className="bg-white rounded-2xl p-6 shadow-md max-w-5xl mx-auto mb-8">
-    <h2 className="text-3xl font-extrabold mb-6 flex items-center gap-3 text-gray-800 bg-gradient-to-r  via-pink-200  via-pink-200 p-4 rounded-xl shadow-sm">
-  <Building2 className="w-7 h-7 text-gray-800" /> Admin Dashboard
-</h2>
+      <h2 className="text-3xl font-extrabold mb-6 flex items-center gap-3 text-gray-800 bg-gradient-to-r from-purple-50 via-pink-100 to-purple-50 p-4 rounded-xl shadow-sm">
+        <Building2 className="w-7 h-7 text-gray-800" /> Admin Dashboard
+      </h2>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { title: "Schools", value: schools.length },
-          { title: "Teachers", value: teachers.length },
-          { title: "Students", value: students.length },
-          { title: "Classes", value: classes.length }
+          { title: "Schools", value: Array.isArray(schools) ? schools.length : 0 },
+          { title: "Teachers", value: Array.isArray(teachers) ? teachers.length : 0 },
+          { title: "Students", value: Array.isArray(students) ? students.length : 0 },
+          { title: "Classes", value: Array.isArray(classes) ? classes.length : 0 }
         ].map(item => (
           <div key={item.title} className="p-4 bg-purple-50 rounded-xl shadow text-center">
             <p className="text-2xl font-bold text-purple-700">{item.value}</p>
@@ -322,51 +453,37 @@ function AdminCard({
           value={selectedClass}
           onChange={(e) => {
             setSelectedClass(e.target.value);
-            fetchAttendance(e.target.value);
           }}
-          className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-400 focus:outline-none"
+          className={selectClassName}
         >
           <option value="">All Classes</option>
-          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {Array.isArray(classes) && classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
 
-        <Select
-          placeholder="Select Teacher"
-          options={teachers.map(t => ({ value: t.id, label: t.name }))}
-          onChange={setSelectedTeacher}
-          value={selectedTeacher}
-          styles={selectStyles}
-          isClearable
-        />
+        <select
+          value={selectedTeacher?.value || ""}
+          onChange={handleSelectChange(setSelectedTeacher)}
+          className={selectClassName}
+        >
+          <option value="">All Teachers</option>
+          {Array.isArray(teachers) && teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
 
-        <Select
-          placeholder="Select Student"
-          options={students.map(s => ({ value: s.id, label: s.name }))}
-          onChange={setSelectedStudent}
-          value={selectedStudent}
-          styles={selectStyles}
-          isClearable
-        />
+        <select
+          value={selectedStudent?.value || ""}
+          onChange={handleSelectChange(setSelectedStudent)}
+          className={selectClassName}
+        >
+          <option value="">All Students</option>
+          {Array.isArray(students) && students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       {/* Show Selected Filters */}
-      <div className="mb-6 bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
-        {selectedTeacher && (
-          <p>
-            <span className="font-semibold">Teacher:</span> {selectedTeacher.label}
-          </p>
-        )}
-        {selectedClassObj && (
-          <p>
-            <span className="font-semibold">Class:</span> {selectedClassObj.name} 
-            {" "}- <span className="text-gray-500">ID: {selectedClassObj.id}</span>
-          </p>
-        )}
-        {selectedStudent && (
-          <p>
-            <span className="font-semibold">Student:</span> {selectedStudent.label}
-          </p>
-        )}
+      <div className="mb-6 bg-gray-50 p-3 rounded-lg text-sm text-gray-700 min-h-[4rem]">
+        {selectedTeacher && <p><span className="font-semibold">Teacher:</span> {selectedTeacher.label}</p>}
+        {selectedClassObj && <p><span className="font-semibold">Class:</span> {selectedClassObj.name} - <span className="text-gray-500">ID: {selectedClassObj.id}</span></p>}
+        {selectedStudent && <p><span className="font-semibold">Student:</span> {selectedStudent.label}</p>}
       </div>
 
       {/* Table */}
@@ -385,19 +502,21 @@ function AdminCard({
           </thead>
           <tbody>
             {filteredAttendance.map((a, i) => (
-              <tr key={i} className="border-b border-gray-200">
+              <tr key={i} className="border-b border-gray-200 hover:bg-gray-100">
                 <td className="py-2 px-3">{a.date || "N/A"}</td>
                 <td className="py-2 px-3">{a.session || "N/A"}</td>
                 <td className="py-2 px-3">{a.className || "N/A"}</td>
                 <td className="py-2 px-3">{a.classId || "N/A"}</td>
                 <td className="py-2 px-3">{a.teacherName || "N/A"}</td>
                 <td className="py-2 px-3">{a.studentName || "N/A"}</td>
-                <td
-                  className={`py-0.5 px-1.5 font-semibold text-white rounded-full w-16 text-center text-xs ${
-                    a.status?.toLowerCase() === "present" ? "bg-green-500" : "bg-red-500"
-                  }`}
-                >
-                  {a.status || "N/A"}
+                <td className="py-2 px-3">
+                  <span
+                    className={`py-1 px-2.5 font-semibold text-white rounded-full w-16 text-center text-xs inline-block ${
+                      a.status?.toLowerCase() === "present" ? "bg-green-500" : "bg-red-500"
+                    }`}
+                  >
+                    {a.status || "N/A"}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -407,3 +526,4 @@ function AdminCard({
     </section>
   );
 }
+

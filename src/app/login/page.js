@@ -26,13 +26,15 @@ export default function LoginPage() {
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-      if (userType === "teacher") {
-        router.push("/dashboard-teacher");
-      } else if (userType === "admin") {
-        router.push("/dashboard-admin");
-      }
+      // Save role & token in localStorage
+      localStorage.setItem("userRole", userType);
+      const token = await user.getIdToken();
+      localStorage.setItem("authToken", token);
+
+      router.push("/dashboard");
     } catch (error) {
       alert("Invalid email or password");
     }
