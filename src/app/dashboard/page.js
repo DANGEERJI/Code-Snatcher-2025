@@ -45,14 +45,35 @@ const authFetch = async (url, options = {}) => {
   return response.json();
 };
 
+// --- Formatting Helper ---
 const formatTimestamp = (timestamp) => {
-  // Check if the timestamp is a Firestore-like object with _seconds
-  if (timestamp && typeof timestamp === 'object' && '_seconds' in timestamp) {
-    // Convert to a readable date string (e.g., "9/21/2025")
-    return new Date(timestamp._seconds * 1000).toLocaleDateString();
+  // Guard against null, undefined, etc.
+  if (!timestamp) {
+    return "N/A";
   }
-  // If it's already a string or another format, return it as is or provide a fallback
-  return typeof timestamp === 'string' ? timestamp : "N/A";
+
+  let date;
+
+  // Case 1: Firestore-like timestamp object
+  if (typeof timestamp === 'object' && '_seconds' in timestamp) {
+    date = new Date(timestamp._seconds * 1000);
+  } 
+  // Case 2: ISO string or other string format parsable by new Date()
+  else if (typeof timestamp === 'string') {
+    date = new Date(timestamp);
+  } 
+  // If it's not a recognizable object or a string, we can't process it.
+  else {
+    return "N/A";
+  }
+
+  // Check if the created date is valid. `new Date('invalid string')` results in an invalid date.
+  if (isNaN(date.getTime())) {
+    return "N/A";
+  }
+
+  // Return formatted date, e.g., "9/21/2025"
+  return date.toLocaleDateString();
 };
 
 
@@ -111,12 +132,13 @@ export default function Dashboard() {
         // Find the corresponding objects in the state arrays
         const classInfo = classes.find(c => c.id === extractedClassId);
         const teacherInfo = teachers.find(t => t.id === extractedTeacherId);
-        // Note: The students array is already enriched, so we find by student.id
+        // Find the student in the original, non-enriched students array if needed
         const studentInfo = students.find(s => s.id === extractedStudentId);
-        console.log(classInfo);
   
         return {
           ...a,
+          // Standardize the date field. Prioritize `date`, fall back to `timestamp`.
+          date: a.date || a.timestamp || null,
           classId: extractedClassId || "N/A",
           className: classInfo?.name || "N/A",
           teacherId: extractedTeacherId || "N/A",
@@ -127,13 +149,13 @@ export default function Dashboard() {
       }) : [];
   
       setAttendanceData(mapped);
-    } catch (err) {
+    } catch (err)      {
       console.error("Error fetching attendance:", err);
       setAttendanceData([]); // Reset on error
     }
   };
 
-  // ---------------- Fetch Students/Teachers/Classes ----------------
+  // ---------------- Fetch Students/Teachers/Classes and then Attendance ----------------
   useEffect(() => {
     // This effect runs only when the school changes.
     if (!schoolId) {
@@ -154,6 +176,7 @@ export default function Dashboard() {
     setSelectedTeacher(null);
     setSelectedStudent(null);
 
+    // Sequentially fetch primary data first
     Promise.all([
       authFetch(`${baseUrl}/schools/${schoolId}/students`),
       authFetch(`${baseUrl}/schools/${schoolId}/teachers`),
@@ -161,6 +184,7 @@ export default function Dashboard() {
     ])
       .then(([studentsData, teachersData, classesData]) => {
         const safeClasses = Array.isArray(classesData) ? classesData : [];
+        const safeTeachers = Array.isArray(teachersData) ? teachersData : [];
         const safeStudents = Array.isArray(studentsData) ? studentsData : [];
         const schoolInfo = schools.find(s => s.id === schoolId);
 
@@ -171,15 +195,18 @@ export default function Dashboard() {
           
           return {
             ...student,
-            // Create objects that match the structure expected by StudentCard for display
             classId: { name: classInfo?.name || "N/A" },
             schoolId: { name: schoolInfo?.name || "N/A" },
           };
         });
 
+        // Set state for primary data
         setStudents(enrichedStudents);
-        setTeachers(Array.isArray(teachersData) ? teachersData : []);
+        setTeachers(safeTeachers);
         setClasses(safeClasses);
+        
+        // NOW, fetch attendance using the fresh data (pass original students for lookup)
+        fetchAttendance("", safeStudents, safeTeachers, safeClasses);
       })
       .catch(err => {
         console.error("Failed to fetch school data:", err);
@@ -187,19 +214,23 @@ export default function Dashboard() {
         setStudents([]);
         setTeachers([]);
         setClasses([]);
+        setAttendanceData([]); // also clear attendance
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [schoolId, schools]); // Rerun if schools array changes
+  }, [schoolId, schools]); // Rerun if schoolId or the schools list changes
 
-  // ---------------- Fetch Attendance ----------------
+  // ---------------- Refetch Attendance when Class Filter Changes ----------------
   useEffect(() => {
-    // This effect runs when the school changes OR when the class filter changes.
-    if (schoolId) {
-      fetchAttendance(selectedClass);
+    // This effect only runs when the class filter changes, not on the initial load.
+    // It relies on the student/teacher data already being in state.
+    if (schoolId && students.length > 0) {
+      // We need original student data here for lookup
+      const originalStudents = students.map(s => ({id: s.id, name: s.name}));
+      fetchAttendance(selectedClass, originalStudents, teachers, classes);
     }
-  }, [schoolId, selectedClass]); // Depends on both
+  }, [selectedClass]); // ONLY depends on the class filter
 
   // A generic style for the select dropdowns
   const selectClassName = "w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-700 focus:ring-2 focus:ring-purple-400 focus:outline-none bg-white";
@@ -289,7 +320,6 @@ export default function Dashboard() {
 // ---------------- StudentCard ---------------- //
 function StudentCard({ student, attendance, filter, setFilter }) {
   if (!student) return <p className="text-gray-500 text-center">No student selected</p>;
-  console.log(student);
 
   const filteredAttendance = attendance
     .filter(a => a.studentId === student.id)
@@ -306,7 +336,7 @@ function StudentCard({ student, attendance, filter, setFilter }) {
         <p><strong>Name:</strong> {student?.name || "N/A"}</p>
         <p><strong>Roll No:</strong> {student?.rollNumber || "N/A"}</p>
         <p><strong>Gender:</strong> {student?.gender || "N/A"}</p>
-        <p><strong>DOB:</strong> {student?.dateOfBirth?._seconds ? new Date(student.dateOfBirth._seconds * 1000).toLocaleDateString() : "N/A"}</p>
+        <p><strong>DOB:</strong> {formatTimestamp(student?.dateOfBirth)}</p>
         <p><strong>Class:</strong> {student?.classId?.name || "N/A"}</p>
         <p><strong>School:</strong> {student?.schoolId?.name || "N/A"}</p>
         <p><strong>Parent:</strong> {student?.parent?.name || "N/A"}</p>
@@ -330,7 +360,7 @@ function StudentCard({ student, attendance, filter, setFilter }) {
             <li key={i} className={`flex justify-between items-center px-3 py-2 rounded-md mb-1 text-sm ${
               a.status?.toLowerCase() === "present" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
             }`}>
-              <span>{formatTimestamp(a.timestamp) || "N/A"} — {a.session || "N/A"}</span>
+              <span>{formatTimestamp(a.date)} — {a.session || "N/A"}</span>
               <span className="font-semibold px-2 py-1 rounded-full text-xs">{a.status || "N/A"}</span>
             </li>
           ))}
@@ -503,7 +533,7 @@ function AdminCard({
           <tbody>
             {filteredAttendance.map((a, i) => (
               <tr key={i} className="border-b border-gray-200 hover:bg-gray-100">
-                <td className="py-2 px-3">{a.date || "N/A"}</td>
+                <td className="py-2 px-3">{formatTimestamp(a.date)}</td>
                 <td className="py-2 px-3">{a.session || "N/A"}</td>
                 <td className="py-2 px-3">{a.className || "N/A"}</td>
                 <td className="py-2 px-3">{a.classId || "N/A"}</td>
