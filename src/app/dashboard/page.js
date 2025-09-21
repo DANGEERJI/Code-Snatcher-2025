@@ -1,193 +1,207 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, BookOpen, Building2, School2 } from "lucide-react";
-import Select from "react-select"; // npm install react-select
+import { User, BookOpen, Building2 } from "lucide-react";
+import Select from "react-select";
 
 export default function Dashboard() {
   const [role, setRole] = useState(null);
   const [schools, setSchools] = useState([]);
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [attendance, setAttendanceData] = useState([]);
-  const [selectedSchool, setSelectedSchool] = useState("");
-  const [selectedClass, setSelectedClass] = useState("");
   const [classes, setClasses] = useState([]);
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [attendance, setAttendanceData] = useState([]);
+  const [selectedSchool, setSelectedSchool] = useState(null);
+  const [selectedClass, setSelectedClass] = useState("");
   const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [loading, setLoading] = useState(false);
 
   const baseUrl = "/api";
+  const schoolId = selectedSchool?.value || "";
 
+  // ---------------- Fetch Schools ----------------
   useEffect(() => {
-    // Set role from localStorage or default
-    const storedRole = localStorage.getItem("userRole");
-    setRole("admin"); // Example default role
-
-    // Fetch all schools for admin/teacher
-    const fetchSchools = async () => {
-      try {
-        const res = await fetch(`${baseUrl}/schools`);
-        const data = await res.json();
-        setSchools(data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    fetchSchools();
+    setRole("admin");
+    fetch(`${baseUrl}/schools`)
+      .then(res => res.json())
+      .then(setSchools)
+      .catch(console.error);
   }, []);
 
-const fetchAttendance = async () => {
+  // ---------------- Fetch Attendance ----------------
+  const fetchAttendance = async (classId = "") => {
+    if (!schoolId) return;
+
+    let url = `${baseUrl}/schools/${schoolId}/attendance`;
+    if (classId) url = `${baseUrl}/schools/${schoolId}/attendance/${classId}`;
+
     try {
-      let url;
-      if (role === "admin" || role === "teacher") {
-        if (selectedClass) {
-          url = `${baseUrl}/schools/${selectedSchool}/attendance/${selectedClass}`;
-        } else {
-          url = `${baseUrl}/schools/${selectedSchool}/attendance`;
-        }
-        const res = await fetch(url);
-        const data = await res.json();
+      const res = await fetch(url);
+      const data = await res.json();
 
-        setAttendanceData(data);
-      }
+      const mapped = data.map(a => ({
+        ...a,
+        classId: a.classId?.id || a.classId?._path?.segments?.[3] || a.classId || "N/A",
+        className: a.className || a.classId?.name || "N/A",
+        teacherId: a.teacherId?.id || a.teacherId || "N/A",
+        teacherName: a.teacherName || a.teacherId?.name || "N/A",
+        studentId: a.studentId?.id || a.studentId || "N/A",
+        studentName: a.studentName || a.studentId?.name || "N/A"
+      }));
+
+      setAttendanceData(mapped);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching attendance:", err);
     }
-};
+  };
 
-  // Fetch students/teachers/attendance based on selection
+  // ---------------- Fetch Students/Teachers/Classes ----------------
   useEffect(() => {
-    if (!selectedSchool) return;
+    if (!schoolId) return;
 
-    const fetchStudents = async () => {
-      try {
-        const res = await fetch(`${baseUrl}/schools/${selectedSchool.value}/students`);
-        const data = await res.json();
-        setStudents(data);
-      } catch (err) {
+    setLoading(true);
+
+    Promise.all([
+      fetch(`${baseUrl}/schools/${schoolId}/students`).then(res => res.json()).then(setStudents),
+      fetch(`${baseUrl}/schools/${schoolId}/teachers`).then(res => res.json()).then(setTeachers),
+      fetch(`${baseUrl}/schools/${schoolId}/classes`).then(res => res.json()).then(setClasses),
+    ])
+      .then(() => {
+        fetchAttendance(selectedClass);
+        setLoading(false);
+      })
+      .catch(err => {
         console.error(err);
-      }
-    };
+        setLoading(false);
+      });
+  }, [schoolId, selectedClass]);
 
-    const fetchTeachers = async () => {
-      try {
-        const res = await fetch(`${baseUrl}/schools/${selectedSchool.value}/teachers`);
-        const data = await res.json();
-        setTeachers(data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  // ---------------- Shared Styles ----------------
+  const selectStyles = {
+    control: (provided) => ({
+      ...provided,
+      borderRadius: "8px",
+      borderColor: "#7C3AED",
+      minHeight: "42px",
+      boxShadow: "none",
+      fontSize: "14px",
+    }),
+    menu: (provided) => ({ ...provided, borderRadius: "8px", zIndex: 100 }),
+  };
 
-    const fetchClasses = async () => {
-      try {
-        const res = await fetch(`/api/schools/${selectedSchool}/classes`);
-        const data = await res.json();
-        setClasses(data); // store classes
-      } catch (error) {
-        console.error("Error fetching classes:", error);
-      }
-    };
-
-    fetchStudents();
-    fetchTeachers();
-    fetchAttendance();
-    fetchClasses();
-  }, [selectedSchool, selectedClass]);
-
-  const filteredAttendance =
-    filter === "all" ? attendance : attendance.filter(a => a.status === filter);
-
+  // ---------------- Render ----------------
   return (
-    <div className="min-h-screen p-8 bg-gradient-to-br from-blue-50 to-blue-100">
-      <h1 className="text-4xl font-bold mb-8">
-        {role?.charAt(0).toUpperCase() + role?.slice(1)} Dashboard
+    <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-blue-100">
+      <h1 className="text-4xl font-bold mb-8 text-gray-800 text-center md:text-left drop-shadow-sm">
+        {role ? role.charAt(0).toUpperCase() + role.slice(1) : ""} Dashboard
       </h1>
 
-      {/* School Selection */}
       {(role === "teacher" || role === "admin") && (
-        <div className="mb-6 w-80">
+        <div className="mb-6 w-full md:w-96">
           <Select
             placeholder="Select School"
             options={schools.map(s => ({ value: s.id, label: s.name }))}
             onChange={setSelectedSchool}
+            value={selectedSchool}
+            styles={selectStyles}
+            isClearable
           />
         </div>
       )}
 
-      {/* Role-based Cards */}
-      {role === "student" && students.length > 0 && (
-        <StudentCard student={students[0]} attendance={filteredAttendance} filter={filter} setFilter={setFilter} />
+      {loading && <p className="text-center text-gray-500">Loading...</p>}
+
+      {role === "student" && students.length > 0 && !loading && (
+        <StudentCard
+          student={students[0]}
+          attendance={attendance}
+          filter={filter}
+          setFilter={setFilter}
+        />
       )}
 
-      {role === "teacher" && selectedSchool && (
+      {role === "teacher" && selectedSchool && !loading && (
         <TeacherCard
           teachers={teachers}
           students={students}
-          attendance={filteredAttendance}
+          attendance={attendance}
           filter={filter}
           setFilter={setFilter}
           selectedTeacher={selectedTeacher}
           setSelectedTeacher={setSelectedTeacher}
           selectedStudent={selectedStudent}
           setSelectedStudent={setSelectedStudent}
+          selectStyles={selectStyles}
         />
       )}
 
-      {role === "admin" && selectedSchool && (
+      {role === "admin" && selectedSchool && !loading && (
         <AdminCard
           schools={schools}
           teachers={teachers}
           students={students}
-          classes={classes}                // all classes of the selected school
-          selectedSchool={selectedSchool}  // currently selected school
-          setSelectedSchool={setSelectedSchool}
-          selectedClass={selectedClass}    // currently selected class
+          classes={classes}
+          selectedClass={selectedClass}
           setSelectedClass={setSelectedClass}
-          attendance={filteredAttendance}  // filtered attendance data
-          filter={filter}                  // attendance filter (all/present/absent)
-          setFilter={setFilter}            // handler to change the filter
-          fetchAttendance={fetchAttendance} // function to fetch attendance based on selections
-      />
+          attendance={attendance}
+          filter={filter}
+          setFilter={setFilter}
+          fetchAttendance={fetchAttendance}
+          selectedTeacher={selectedTeacher}
+          setSelectedTeacher={setSelectedTeacher}
+          selectedStudent={selectedStudent}
+          setSelectedStudent={setSelectedStudent}
+          selectStyles={selectStyles}
+        />
       )}
     </div>
   );
 }
 
-// ---------- COMPONENTS ---------- //
-
+// ---------------- StudentCard ---------------- //
 function StudentCard({ student, attendance, filter, setFilter }) {
+  if (!student) return <p className="text-gray-500 text-center">No student selected</p>;
+
+  const filteredAttendance = attendance.filter(a => a.studentId === student.id);
+
   return (
-    <section className="bg-white shadow-xl rounded-2xl p-6">
+    <section className="bg-white rounded-2xl p-6 shadow-md max-w-4xl mx-auto mb-8">
       <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2 text-blue-700">
         <User /> Student Dashboard
       </h2>
-      <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-        <p><strong>Name:</strong> {student.name}</p>
-        <p><strong>Roll No:</strong> {student.rollNumber}</p>
-        <p><strong>Gender:</strong> {student.gender}</p>
-        <p><strong>DOB:</strong> {new Date(student.dateOfBirth._seconds * 1000).toLocaleDateString()}</p>
-        <p><strong>Admission Date:</strong> {new Date(student.admissionDate._seconds * 1000).toLocaleDateString()}</p>
-        <p><strong>Class:</strong> {student.classId._path.segments[3]}</p>
-        <p><strong>School:</strong> {student.schoolId._path.segments[1]}</p>
-        <p><strong>Parent:</strong> {student.parent.name}</p>
-        <p><strong>Email:</strong> {student.parent.contact.email || "N/A"}</p>
-        <p><strong>Phone:</strong> {student.parent.contact.phone}</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-gray-700 text-sm">
+        <p><strong>Name:</strong> {student?.name || "N/A"}</p>
+        <p><strong>Roll No:</strong> {student?.rollNumber || "N/A"}</p>
+        <p><strong>Gender:</strong> {student?.gender || "N/A"}</p>
+        <p><strong>DOB:</strong> {student?.dateOfBirth?._seconds ? new Date(student.dateOfBirth._seconds * 1000).toLocaleDateString() : "N/A"}</p>
+        <p><strong>Class:</strong> {student?.classId?.name || student?.classId || "N/A"}</p>
+        <p><strong>School:</strong> {student?.schoolId?.name || student?.schoolId || "N/A"}</p>
+        <p><strong>Parent:</strong> {student?.parent?.name || "N/A"}</p>
+        <p><strong>Phone:</strong> {student?.parent?.contact?.phone || "N/A"}</p>
       </div>
 
       <div className="mt-4">
         <h3 className="font-semibold text-gray-700 mb-2">Attendance</h3>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className="border rounded p-1 text-sm mb-3">
+        <select
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          className="border border-gray-300 rounded-lg p-2 text-gray-700 w-40 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+        >
           <option value="all">All</option>
-          <option value="Present">Present</option>
-          <option value="Absent">Absent</option>
+          <option value="present">Present</option>
+          <option value="absent">Absent</option>
         </select>
-        <ul className="text-sm space-y-1">
-          {attendance?.map((a, i) => (
-            <li key={i} className={`p-2 rounded ${a.status === "Present" ? "bg-green-500" : "bg-red-500"}`}>
-              {a.date} - {a.session} - {a.status}
+
+        <ul className="mt-3 max-h-64 overflow-y-auto">
+          {filteredAttendance?.map((a, i) => (
+            <li key={i} className={`flex justify-between items-center px-3 py-2 rounded-md mb-1 text-sm ${
+              a.status?.toLowerCase() === "present" ? "bg-green-100" : "bg-red-100"
+            }`}>
+              <span>{a.date || "N/A"} — {a.session || "N/A"}</span>
+              <span className="font-semibold px-2 py-1 rounded-full text-xs">{a.status || "N/A"}</span>
             </li>
           ))}
         </ul>
@@ -196,6 +210,7 @@ function StudentCard({ student, attendance, filter, setFilter }) {
   );
 }
 
+// ---------------- TeacherCard ---------------- //
 function TeacherCard({
   teachers,
   students,
@@ -206,109 +221,188 @@ function TeacherCard({
   setSelectedTeacher,
   selectedStudent,
   setSelectedStudent,
+  selectStyles
 }) {
+  const filteredAttendance = attendance
+    .filter(a => (selectedTeacher ? a.teacherId === selectedTeacher?.value : true))
+    .filter(a => (selectedStudent ? a.studentId === selectedStudent?.value : true))
+    .filter(a => (filter === "all" ? true : a.status?.toLowerCase() === filter.toLowerCase()));
+
   return (
-    <section className="bg-white shadow-xl rounded-2xl p-6">
+    <section className="bg-white rounded-2xl p-6 shadow-md max-w-4xl mx-auto mb-8">
       <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2 text-green-700">
         <BookOpen /> Teacher Dashboard
       </h2>
 
-      <div className="mb-4 w-80">
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <Select
           placeholder="Select Teacher"
           options={teachers.map(t => ({ value: t.id, label: t.name }))}
           onChange={setSelectedTeacher}
+          value={selectedTeacher}
+          styles={selectStyles}
+          isClearable
         />
-      </div>
-
-      <div className="mb-4 w-80">
         <Select
           placeholder="Select Student"
           options={students.map(s => ({ value: s.id, label: s.name }))}
           onChange={setSelectedStudent}
+          value={selectedStudent}
+          styles={selectStyles}
+          isClearable
         />
       </div>
 
-      {selectedStudent && (
-        <StudentCard student={students.find(s => s.id === selectedStudent.value)} attendance={attendance} filter={filter} setFilter={setFilter} />
+      {!selectedStudent ? (
+        <p className="text-gray-500 text-center">Please select a student to view details</p>
+      ) : (
+        <StudentCard
+          student={students.find(s => s.id === selectedStudent?.value)}
+          attendance={filteredAttendance}
+          filter={filter}
+          setFilter={setFilter}
+        />
       )}
     </section>
   );
 }
 
+// ---------------- AdminCard ---------------- //
 function AdminCard({
   schools,
   teachers,
   students,
   classes,
-  selectedSchool,
-  setSelectedSchool,
   selectedClass,
   setSelectedClass,
   attendance,
   filter,
   setFilter,
-  fetchAttendance
-}){
-return (
-    <section className="bg-white shadow-xl rounded-2xl p-6">
-      <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2 text-purple-700">
-        <Building2 /> Admin Dashboard
-      </h2>
+  fetchAttendance,
+  selectedTeacher,
+  setSelectedTeacher,
+  selectedStudent,
+  setSelectedStudent,
+  selectStyles
+}) {
+  // client-side filtering
+  const filteredAttendance = attendance
+    .filter(a => (selectedClass ? String(a.classId) === String(selectedClass) : true))
+    .filter(a => (selectedTeacher ? String(a.teacherId) === String(selectedTeacher?.value) : true))
+    .filter(a => (selectedStudent ? String(a.studentId) === String(selectedStudent?.value) : true))
+    .filter(a => (filter === "all" ? true : a.status?.toLowerCase() === filter.toLowerCase()));
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl text-center shadow">
-          <p className="text-2xl font-bold text-purple-800">{schools.length}</p>
-          <p className="text-sm text-gray-600">Schools</p>
-        </div>
-        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl text-center shadow">
-          <p className="text-2xl font-bold text-purple-800">{teachers.length}</p>
-          <p className="text-sm text-gray-600">Teachers</p>
-        </div>
-        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl text-center shadow">
-          <p className="text-2xl font-bold text-purple-800">{students.length}</p>
-          <p className="text-sm text-gray-600">Students</p>
-        </div>
+  // find selected class object
+  const selectedClassObj = classes.find(c => String(c.id) === String(selectedClass));
+
+  return (
+    <section className="bg-white rounded-2xl p-6 shadow-md max-w-5xl mx-auto mb-8">
+    <h2 className="text-3xl font-extrabold mb-6 flex items-center gap-3 text-gray-800 bg-gradient-to-r  via-pink-200  via-pink-200 p-4 rounded-xl shadow-sm">
+  <Building2 className="w-7 h-7 text-gray-800" /> Admin Dashboard
+</h2>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+        {[
+          { title: "Schools", value: schools.length },
+          { title: "Teachers", value: teachers.length },
+          { title: "Students", value: students.length },
+          { title: "Classes", value: classes.length }
+        ].map(item => (
+          <div key={item.title} className="p-4 bg-purple-50 rounded-xl shadow text-center">
+            <p className="text-2xl font-bold text-purple-700">{item.value}</p>
+            <p className="text-gray-600">{item.title}</p>
+          </div>
+        ))}
       </div>
-      <select
-        value={selectedSchool}
-        onChange={(e) => setSelectedSchool(e.target.value)}
-        className="border rounded p-1 text-sm mb-3"
-      >
-        {schools.map((s) => (
-          <option key={s.id} value={s.id}>{s.name}</option>
-        ))}
-      </select>
-      <select
-        value={selectedClass}
-        onChange={(e) => setSelectedClass(e.target.value)}
-        className="border rounded p-1 text-sm mb-3"
-      >
-        <option value="">All Classes</option>
-        {classes.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
-      <button
-        onClick={fetchAttendance}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
-      >
-        Fetch Attendance
-      </button>
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-2">Attendance Overview</h3>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className="border rounded p-1 text-sm mb-3">
-          <option value="all">All</option>
-          <option value="Present">Present</option>
-          <option value="Absent">Absent</option>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-4">
+        <select
+          value={selectedClass}
+          onChange={(e) => {
+            setSelectedClass(e.target.value);
+            fetchAttendance(e.target.value);
+          }}
+          className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-400 focus:outline-none"
+        >
+          <option value="">All Classes</option>
+          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <ul className="text-sm space-y-1">
-          {attendance?.map((a, i) => (
-            <li key={i} className={`p-2 rounded ${a.status === "Present" ? "bg-green-500" : "bg-red-500"}`}>
-              {a.date} - {a.session} - {a.status}
-            </li>
-          ))}
-        </ul>
+
+        <Select
+          placeholder="Select Teacher"
+          options={teachers.map(t => ({ value: t.id, label: t.name }))}
+          onChange={setSelectedTeacher}
+          value={selectedTeacher}
+          styles={selectStyles}
+          isClearable
+        />
+
+        <Select
+          placeholder="Select Student"
+          options={students.map(s => ({ value: s.id, label: s.name }))}
+          onChange={setSelectedStudent}
+          value={selectedStudent}
+          styles={selectStyles}
+          isClearable
+        />
+      </div>
+
+      {/* Show Selected Filters */}
+      <div className="mb-6 bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
+        {selectedTeacher && (
+          <p>
+            <span className="font-semibold">Teacher:</span> {selectedTeacher.label}
+          </p>
+        )}
+        {selectedClassObj && (
+          <p>
+            <span className="font-semibold">Class:</span> {selectedClassObj.name} 
+            {" "}- <span className="text-gray-500">ID: {selectedClassObj.id}</span>
+          </p>
+        )}
+        {selectedStudent && (
+          <p>
+            <span className="font-semibold">Student:</span> {selectedStudent.label}
+          </p>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto bg-gray-50 rounded-lg p-4">
+        <table className="w-full table-auto text-left text-gray-700">
+          <thead>
+            <tr className="border-b border-gray-300">
+              <th className="py-2 px-3">Date</th>
+              <th className="py-2 px-3">Session</th>
+              <th className="py-2 px-3">Class</th>
+              <th className="py-2 px-3">Class ID</th>
+              <th className="py-2 px-3">Teacher</th>
+              <th className="py-2 px-3">Student</th>
+              <th className="py-2 px-3">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAttendance.map((a, i) => (
+              <tr key={i} className="border-b border-gray-200">
+                <td className="py-2 px-3">{a.date || "N/A"}</td>
+                <td className="py-2 px-3">{a.session || "N/A"}</td>
+                <td className="py-2 px-3">{a.className || "N/A"}</td>
+                <td className="py-2 px-3">{a.classId || "N/A"}</td>
+                <td className="py-2 px-3">{a.teacherName || "N/A"}</td>
+                <td className="py-2 px-3">{a.studentName || "N/A"}</td>
+                <td
+                  className={`py-0.5 px-1.5 font-semibold text-white rounded-full w-16 text-center text-xs ${
+                    a.status?.toLowerCase() === "present" ? "bg-green-500" : "bg-red-500"
+                  }`}
+                >
+                  {a.status || "N/A"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );
