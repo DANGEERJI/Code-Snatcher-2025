@@ -2,6 +2,18 @@ import admin from "@/lib/firebaseAdmin";
 import { verifyIdToken } from "@/lib/authMiddleware";
 import { NextResponse } from "next/server";
 
+export async function GET(req, { params }) {
+  const { schoolId, classId } = params;
+  try {
+    await verifyIdToken(req);
+    const docSnap = await admin.firestore().collection("schools").doc(schoolId).collection("classes").doc(classId).get();
+    if (!docSnap.exists) return NextResponse.json({ error: "Class not found" }, { status: 404 });
+    return NextResponse.json({ id: docSnap.id, ...docSnap.data() });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 export async function PATCH(req, { params }) {
   const { schoolId, classId } = params;
   try {
@@ -15,24 +27,4 @@ export async function PATCH(req, { params }) {
   }
 }
 
-export async function GET(req, { params }) {
-  const { schoolId, classId } = params;
-  try {
-    await verifyIdToken(req);
-    const docSnap = await admin
-      .firestore()
-      .collection("schools")
-      .doc(schoolId)
-      .collection("classes")
-      .doc(classId)
-      .get();
 
-    if (!docSnap.exists) {
-      return NextResponse.json({ error: "Class not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ id: docSnap.id, ...docSnap.data() });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}

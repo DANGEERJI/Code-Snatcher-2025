@@ -83,6 +83,8 @@ export default function APITestPage() {
           <label>Operation:</label>
           <select value={operation} onChange={e => setOperation(e.target.value)} className="w-full border p-2 rounded">
             <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PATCH">PATCH</option>
           </select>
         </div>
 
